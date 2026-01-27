@@ -7,12 +7,18 @@
 
 const PRIMARY = "#2563eb";     // main overlay color
 const PRIMARY_DARK = "#1e40af"; // for lines / emphasis
+const IS_VIEW_MODE = location.pathname.startsWith("/v/");
 
 
 
 // ==============================
 // Map bootstrap
 // ==============================
+
+if (IS_VIEW_MODE) {
+    document.getElementById("readonly-banner").hidden = false;
+}
+
 
 const map = new maplibregl.Map({
     container: "map",
@@ -80,6 +86,9 @@ function handleFile(event) {
 }
 
 function renderGeoJSON(geojson) {
+
+    document.getElementById("empty-state")?.remove();
+
     // Remove existing source/layers if present
     if (map.getSource(SOURCE_ID)) {
         removeLayerIfExists("points");
@@ -162,38 +171,36 @@ function removeLayerIfExists(id) {
 
 const dropzone = document.getElementById("dropzone");
 
-["dragenter", "dragover"].forEach(eventName => {
-    dropzone.addEventListener(eventName, e => {
-        e.preventDefault();
-        e.stopPropagation();
-        dropzone.classList.add("dragover");
+if (!IS_VIEW_MODE) {
+    ["dragenter", "dragover"].forEach(eventName => {
+        dropzone.addEventListener(eventName, e => {
+            e.preventDefault();
+            e.stopPropagation();
+            dropzone.classList.add("dragover");
+        });
     });
-});
 
-["dragleave", "drop"].forEach(eventName => {
-    dropzone.addEventListener(eventName, e => {
-        e.preventDefault();
-        e.stopPropagation();
-        dropzone.classList.remove("dragover");
+    ["dragleave", "drop"].forEach(eventName => {
+        dropzone.addEventListener(eventName, e => {
+            e.preventDefault();
+            e.stopPropagation();
+            dropzone.classList.remove("dragover");
+        });
     });
-});
 
-dropzone.addEventListener("drop", e => {
-    const file = e.dataTransfer.files[0];
-    if (!file) return;
+    dropzone.addEventListener("drop", e => {
+        const file = e.dataTransfer.files[0];
+        if (!file) return;
 
-    if (!file.name.match(/\.(geojson|json)$/i)) {
-        alert("Please drop a GeoJSON file");
-        return;
-    }
+        if (!file.name.match(/\.(geojson|json)$/i)) {
+            alert("Please drop a GeoJSON file");
+            return;
+        }
 
-    // Reuse existing file handler
-    const fakeEvent = {
-        target: { files: [file] }
-    };
+        handleFile({ target: { files: [file] } });
+    });
+}
 
-    handleFile(fakeEvent);
-});
 
 
 // ==============================
@@ -262,9 +269,35 @@ async function uploadAndGetLink(geojson) {
     const { id } = await res.json();
     const url = `${location.origin}/v/${id}`;
 
-    // v0 UX: prompt is fine
-    prompt("Share this link:", url);
+    showShareBox(url);
 }
+
+//==================================
+// Helper Function for Link box
+//==================================
+
+function showShareBox(url) {
+    if (IS_VIEW_MODE) return;
+
+    const box = document.getElementById("share-box");
+    const input = document.getElementById("share-url");
+    const button = document.getElementById("copy-btn");
+
+    input.value = url;
+    box.hidden = false;
+
+    button.onclick = async () => {
+        try {
+            await navigator.clipboard.writeText(url);
+            button.textContent = "Copied";
+            setTimeout(() => (button.textContent = "Copy"), 1200);
+        } catch {
+            input.select();
+        }
+    };
+}
+
+
 
 //====================================
 // Hydration Logic for /v/:id
