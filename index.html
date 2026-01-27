@@ -38,6 +38,25 @@
                 font-size: 13px;
             }
 
+           .upload-button {
+            display: inline-block;
+            font-size: 13px;
+            font-weight: 600;
+            color: #1e40af;
+            cursor: pointer;
+            padding: 6px 10px;
+            border-radius: 6px;
+            border: 1px dashed #93c5fd;
+            background: #eff6ff;
+            transition: background 0.15s ease, border-color 0.15s ease;
+        }
+
+            .upload-button:hover {
+                background: #dbeafe;
+                border-color: #60a5fa;
+            }
+
+
         .popup {
             font-size: 12px;
             max-height: 200px;
@@ -95,21 +114,112 @@
                 opacity: 1;
             }
 
+        body.view-mode #dropzone {
+            display: none;
+        }
+
+        #empty-state {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 4;
+            font-size: 18px;
+            font-weight: 600;
+            color: #1e40af; /* same family as PRIMARY_DARK */
+
+            background: rgba(255, 255, 255, 0.9);
+            padding: 14px 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            pointer-events: none;
+            user-select: none;
+            text-align: center;
+        }
+
+        #share-box {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            z-index: 12;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(4px);
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 10px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+            font-size: 12px;
+            width: 260px;
+        }
+
+        .share-label {
+            font-weight: 600;
+            margin-bottom: 6px;
+            color: #1e40af;
+        }
+
+        .share-row {
+            display: flex;
+            gap: 6px;
+        }
+
+        #share-url {
+            flex: 1;
+            font-size: 12px;
+            padding: 4px 6px;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+        }
+
+        #copy-btn {
+            font-size: 12px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            border: 1px solid #93c5fd;
+            background: #eff6ff;
+            cursor: pointer;
+        }
+
+            #copy-btn:hover {
+                background: #dbeafe;
+            }
+
+
+
+
+
 
 
     </style>
 </head>
 <body>
 
-    <div id="readonly-banner">
+    <div id="readonly-banner" hidden>
         View-only map · No editing
     </div>
 
-    <div id="upload">
-        <input type="file" id="fileInput" accept=".geojson,.json" title="Upload a GeoJSON file to view" />
+    <div id="share-box" hidden>
+        <div class="share-label">Shareable link</div>
+        <div class="share-row">
+            <input id="share-url" readonly />
+            <button id="copy-btn">Copy</button>
+        </div>
     </div>
 
+
+    <div id="upload">
+        <label for="fileInput" class="upload-button">
+            Drop files here
+        </label>
+        <input type="file" id="fileInput" accept=".geojson,.json" hidden />
+    </div>
+
+
     <div id="dropzone"></div>
+
+    <div id="empty-state">
+        Drop a GeoJSON file to preview and share.
+    </div>
 
     <div id="map"></div>
 
