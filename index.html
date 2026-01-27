@@ -1,0 +1,118 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>Map Viewer</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <!-- MapLibre -->
+    <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css"
+          rel="stylesheet" />
+    <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+
+    <style>
+        html, body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+
+        #map {
+            position: absolute;
+            inset: 0;
+        }
+
+        #upload {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            z-index: 10;
+            background: #fff;
+            padding: 8px 10px;
+            border-radius: 6px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+
+            #upload input {
+                font-size: 13px;
+            }
+
+        .popup {
+            font-size: 12px;
+            max-height: 200px;
+            overflow: auto;
+        }
+
+            .popup table {
+                border-collapse: collapse;
+            }
+
+            .popup td {
+                padding: 2px 6px;
+                vertical-align: top;
+                border-bottom: 1px solid #eee;
+            }
+
+                .popup td.key {
+                    font-weight: 600;
+                    white-space: nowrap;
+                }
+
+        #dropzone {
+            position: absolute;
+            inset: 0;
+            z-index: 5;
+            pointer-events: none;
+        }
+
+            #dropzone.dragover {
+                pointer-events: auto;
+                outline: 3px dashed #4a90e2;
+                outline-offset: -12px;
+                background: rgba(74, 144, 226, 0.08);
+            }
+
+
+        #readonly-banner {
+            position: absolute;
+            bottom: 25px;
+            right: 12px;
+            z-index: 11;
+            opacity: 0.85;
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(4px);
+            color: #444;
+            font-size: 12px;
+            padding: 6px 10px;
+            border-radius: 6px;
+            border: 1px solid #e0e0e0;
+            user-select: none;
+            pointer-events: none;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+        }
+            #readonly-banner:hover {
+                opacity: 1;
+            }
+
+
+
+    </style>
+</head>
+<body>
+
+    <div id="readonly-banner">
+        View-only map · No editing
+    </div>
+
+    <div id="upload">
+        <input type="file" id="fileInput" accept=".geojson,.json" title="Upload a GeoJSON file to view" />
+    </div>
+
+    <div id="dropzone"></div>
+
+    <div id="map"></div>
+
+    <script src="/app.js"></script>
+</body>
+</html>
