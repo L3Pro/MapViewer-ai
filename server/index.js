@@ -6,54 +6,84 @@ import { fileURLToPath } from "url";
 
 const app = express();
 app.use(cors());
-app.use(express.json({ limit: "5mb" }));
+app.use(express.json({ limit: "10mb" }));
 
+// -------------------------------------
 // Resolve project root
+// -------------------------------------
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PROJECT_ROOT = path.resolve(__dirname, "..");
 
-// ------------------------------
-// In-memory GeoJSON store (v0)
-// ------------------------------
+// -------------------------------------
+// In-memory bundle store (v0)
+// -------------------------------------
+// {
+//   [id]: {
+//     files: [{ name, geojson }],
+//     createdAt: Date
+//   }
+// }
 const store = Object.create(null);
 
-// ------------------------------
-// API ROUTES FIRST
-// ------------------------------
+// -------------------------------------
+// API: Share bundle
+// -------------------------------------
 app.post("/api/share", (req, res) => {
-    const geojson = req.body;
+    const { files } = req.body || {};
 
-    if (!geojson || geojson.type !== "FeatureCollection") {
-        return res.status(400).json({ error: "Invalid GeoJSON" });
+    if (!Array.isArray(files) || files.length === 0) {
+        return res.status(400).json({ error: "Expected files[]" });
+    }
+
+    for (const f of files) {
+        if (
+            !f ||
+            typeof f.name !== "string" ||
+            !f.geojson ||
+            f.geojson.type !== "FeatureCollection"
+        ) {
+            return res.status(400).json({
+                error: "Each file must have { name, geojson: FeatureCollection }"
+            });
+        }
     }
 
     const id = nanoid(8);
-    store[id] = geojson;
+
+    store[id] = {
+        files,
+        createdAt: new Date()
+    };
 
     res.json({ id });
 });
 
+// -------------------------------------
+// API: View bundle
+// -------------------------------------
 app.get("/api/view/:id", (req, res) => {
-    const geojson = store[req.params.id];
-    if (!geojson) return res.status(404).json({ error: "Not found" });
+    const bundle = store[req.params.id];
+    if (!bundle) {
+        return res.status(404).json({ error: "Not found" });
+    }
 
-    res.json(geojson);
+    res.json(bundle);
 });
 
-// ------------------------------
-// STATIC FRONTEND
-// ------------------------------
+// -------------------------------------
+// Static frontend
+// -------------------------------------
 app.use(express.static(PROJECT_ROOT));
 
-// ------------------------------
-// SPA FALLBACK (LAST!)
-// ------------------------------
+// -------------------------------------
+// SPA fallback (LAST)
+// -------------------------------------
 app.use((req, res) => {
     res.sendFile(path.join(PROJECT_ROOT, "index.html"));
 });
 
-
+// -------------------------------------
 app.listen(3001, () => {
     console.log("Server running on http://localhost:3001");
 });

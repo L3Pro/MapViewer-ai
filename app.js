@@ -12,6 +12,18 @@ let fileCounter = 0;
 const filesRegistry = []; // [{ id, name, geojson, bounds, sourceId, layerIds, visible }]
 
 
+//=================================
+// Bundle Payload Helper
+//=================================
+function getBundlePayload() {
+    return {
+        files: filesRegistry.map(f => ({
+            name: f.name,
+            geojson: f.geojson
+        }))
+    };
+}
+
 
 // ==============================
 // Map bootstrap
@@ -158,8 +170,8 @@ function renderFilesPanel() {
     const list = document.getElementById("files-list");
     if (!panel || !list) return;
 
-    // Show panel only when >1 file
-    panel.hidden = filesRegistry.length < 2;
+    // Show panel only when there is a file
+    panel.hidden = filesRegistry.length === 0;
 
     list.innerHTML = "";
 
@@ -183,8 +195,24 @@ function renderFilesPanel() {
         name.className = "file-name";
         name.textContent = file.name;
 
+        const spacer = document.createElement("div");
+        spacer.style.flex = "1";
+
+        const removeBtn = document.createElement("button");
+        removeBtn.className = "file-remove";
+        removeBtn.type = "button";
+        removeBtn.textContent = "✕";
+
+        removeBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            removeFile(file.id);
+        });
+
         row.appendChild(eye);
         row.appendChild(name);
+        row.appendChild(spacer);
+        row.appendChild(removeBtn);
+
 
         row.addEventListener("click", () => {
             if (file.bounds) {
@@ -229,6 +257,8 @@ document.getElementById("fileInput").addEventListener("change", (e) => {
 
 
 async function handleFiles(files) {
+    let added = false;
+
     for (const file of files) {
         if (!file.name.match(/\.(geojson|json)$/i)) {
             alert(`Unsupported file: ${file.name}`);
@@ -245,12 +275,19 @@ async function handleFiles(files) {
             }
 
             addGeoJSONFileLayer(file.name, geojson);
+            added = true;
         } catch (err) {
             console.error(err);
             alert(`Failed to load: ${file.name}`);
         }
     }
+
+    // ✅ Generate / update share link AFTER files are added
+    if (added && !IS_VIEW_MODE) {
+        uploadBundleAndGetLink();
+    }
 }
+
 
 
 
@@ -359,7 +396,7 @@ function extractCoords(geometry) {
 
 
 //==================================
-// Helper Function for Link box
+// Helper Function for Share Box
 //==================================
 
 function showShareBox(url) {
@@ -369,18 +406,51 @@ function showShareBox(url) {
     const input = document.getElementById("share-url");
     const button = document.getElementById("copy-btn");
 
+    if (!box || !input || !button) return;
+
     input.value = url;
     box.hidden = false;
 
+    // Reset button state in case this is called multiple times
+    button.textContent = "Copy";
+
     button.onclick = async () => {
         try {
-            await navigator.clipboard.writeText(url);
+            await navigator.clipboard.writeText(input.value);
             button.textContent = "Copied";
-            setTimeout(() => (button.textContent = "Copy"), 1200);
+            setTimeout(() => {
+                button.textContent = "Copy";
+            }, 1200);
         } catch {
+            input.focus();
             input.select();
         }
     };
+}
+
+
+//====================================
+// Upload Bundle and Get Link
+//====================================
+
+async function uploadBundleAndGetLink() {
+    const payload = getBundlePayload();
+
+    if (!payload.files.length) return;
+
+    const res = await fetch("/api/share", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) {
+        alert("Failed to create share link.");
+        return;
+    }
+
+    const { id } = await res.json();
+    showShareBox(`${location.origin}/v/${id}`);
 }
 
 
@@ -398,20 +468,60 @@ async function maybeLoadSharedMapFromUrl() {
     try {
         const res = await fetch(`/api/view/${id}`);
         if (!res.ok) {
-            alert("Shared map not found (maybe expired).");
+            alert("Shared bundle not found (maybe expired).");
             return;
         }
-        const geojson = await res.json();
-        addGeoJSONFileLayer("Shared file", geojson);
 
+        const bundle = await res.json();
 
-        // Optional: hide upload UI in view mode
-        const fileInput = document.getElementById("fileInput");
-        if (fileInput) fileInput.style.display = "none";
+        if (!bundle.files || !Array.isArray(bundle.files)) {
+            alert("Invalid bundle format.");
+            return;
+        }
+
+        // Render each file in order
+        bundle.files.forEach((file, index) => {
+            addGeoJSONFileLayer(file.name, file.geojson);
+        });
+
+        // Hide upload UI in view mode
+        document.body.classList.add("view-mode");
+
+        const upload = document.getElementById("upload");
+        if (upload) upload.style.display = "none";
+
     } catch (e) {
         console.error(e);
-        alert("Failed to load shared map.");
+        alert("Failed to load shared bundle.");
     }
+}
+
+//=====================================
+// Delete Handler
+//=====================================
+
+function removeFile(fileId) {
+    const index = filesRegistry.findIndex(f => f.id === fileId);
+    if (index === -1) return;
+
+    const file = filesRegistry[index];
+
+    // Remove layers
+    for (const layerId of file.layerIds) {
+        if (map.getLayer(layerId)) {
+            map.removeLayer(layerId);
+        }
+    }
+
+    // Remove source
+    if (map.getSource(file.sourceId)) {
+        map.removeSource(file.sourceId);
+    }
+
+    // Remove from registry
+    filesRegistry.splice(index, 1);
+
+    renderFilesPanel();
 }
 
 
