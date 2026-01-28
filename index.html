@@ -82,15 +82,19 @@
             position: absolute;
             inset: 0;
             z-index: 5;
-            pointer-events: none;
+            pointer-events: none; /* map always usable */
         }
 
-            #dropzone.dragover {
-                pointer-events: auto;
-                outline: 3px dashed #4a90e2;
-                outline-offset: -12px;
-                background: rgba(74, 144, 226, 0.08);
-            }
+        body.dragging #dropzone {
+            pointer-events: auto;
+        }
+
+        body.dragging #dropzone {
+            outline: 3px dashed #4a90e2;
+            outline-offset: -12px;
+            background: rgba(74, 144, 226, 0.08);
+        }
+
 
 
         #readonly-banner {
@@ -140,7 +144,7 @@
         #share-box {
             position: absolute;
             top: 12px;
-            right: 12px;
+            right: 48px;
             z-index: 12;
             background: rgba(255, 255, 255, 0.95);
             backdrop-filter: blur(4px);
@@ -150,7 +154,11 @@
             box-shadow: 0 2px 8px rgba(0,0,0,0.12);
             font-size: 12px;
             width: 260px;
+            pointer-events: auto;
         }
+            #share-box input {
+                pointer-events: auto;
+            }
 
         .share-label {
             font-weight: 600;
@@ -184,6 +192,63 @@
                 background: #dbeafe;
             }
 
+        #files-panel {
+            position: absolute;
+            top: 70px;
+            left: 12px;
+            z-index: 12;
+            width: 240px;
+            max-height: calc(100vh - 100px);
+            overflow: auto;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(4px);
+            border: 1px solid #e0e0e0;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.12);
+            padding: 10px;
+            font-size: 12px;
+        }
+
+        .files-title {
+            font-weight: 700;
+            color: #1e40af;
+            margin-bottom: 8px;
+        }
+
+        .file-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 6px;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+            .file-row:hover {
+                background: #eff6ff;
+            }
+
+        .file-eye {
+            width: 22px;
+            height: 22px;
+            border-radius: 6px;
+            border: 1px solid #93c5fd;
+            background: #eff6ff;
+            cursor: pointer;
+            flex: 0 0 auto;
+        }
+
+            .file-eye:hover {
+                background: #dbeafe;
+            }
+
+        .file-name {
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            color: #111827;
+        }
 
 
 
@@ -206,10 +271,14 @@
         </div>
     </div>
 
+    <div id="files-panel" hidden>
+        <div class="files-title">Files</div>
+        <div id="files-list"></div>
+    </div>
 
     <div id="upload">
         <label for="fileInput" class="upload-button">
-            Drop files here
+            Drop GeoJSON anywhere or click to upload
         </label>
         <input type="file" id="fileInput" accept=".geojson,.json" hidden />
     </div>

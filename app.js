@@ -10,6 +10,34 @@ const PRIMARY_DARK = "#1e40af"; // for lines / emphasis
 const IS_VIEW_MODE = location.pathname.startsWith("/v/");
 
 
+// ==============================
+// Global drag state (IMPORTANT)
+// ==============================
+
+let dragCounter = 0;
+
+document.addEventListener("dragenter", e => {
+    e.preventDefault();
+    dragCounter++;
+    document.body.classList.add("dragging");
+});
+
+document.addEventListener("dragleave", e => {
+    dragCounter--;
+    if (dragCounter === 0) {
+        document.body.classList.remove("dragging");
+    }
+});
+
+document.addEventListener("dragover", e => {
+    e.preventDefault();
+});
+
+document.addEventListener("drop", e => {
+    e.preventDefault();
+    dragCounter = 0;
+    document.body.classList.remove("dragging");
+});
 
 // ==============================
 // Map bootstrap
