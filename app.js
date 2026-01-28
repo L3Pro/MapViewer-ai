@@ -8,36 +8,10 @@
 const PRIMARY = "#2563eb";     // main overlay color
 const PRIMARY_DARK = "#1e40af"; // for lines / emphasis
 const IS_VIEW_MODE = location.pathname.startsWith("/v/");
+let fileCounter = 0;
+const filesRegistry = []; // [{ id, name, geojson, bounds, sourceId, layerIds, visible }]
 
 
-// ==============================
-// Global drag state (IMPORTANT)
-// ==============================
-
-let dragCounter = 0;
-
-document.addEventListener("dragenter", e => {
-    e.preventDefault();
-    dragCounter++;
-    document.body.classList.add("dragging");
-});
-
-document.addEventListener("dragleave", e => {
-    dragCounter--;
-    if (dragCounter === 0) {
-        document.body.classList.remove("dragging");
-    }
-});
-
-document.addEventListener("dragover", e => {
-    e.preventDefault();
-});
-
-document.addEventListener("drop", e => {
-    e.preventDefault();
-    dragCounter = 0;
-    document.body.classList.remove("dragging");
-});
 
 // ==============================
 // Map bootstrap
@@ -77,102 +51,55 @@ map.getCanvas().addEventListener("contextmenu", e => {
     e.preventDefault();
 });
 
+//=================================
+// Add GeoJSON File Layer Function
+//================================
 
-
-
-// ==============================
-// GeoJSON handling
-// ==============================
-
-const SOURCE_ID = "uploaded-geojson";
-
-document.getElementById("fileInput").addEventListener("change", handleFile);
-
-function handleFile(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = () => {
-        try {
-            const geojson = JSON.parse(reader.result);
-            renderGeoJSON(geojson);
-
-            if (!location.pathname.startsWith("/v/")) {
-                uploadAndGetLink(geojson);
-            }
-
-
-        } catch (err) {
-            alert("Invalid GeoJSON file");
-            console.error(err);
-        }
-    };
-    reader.readAsText(file);
-
- 
-}
-
-function renderGeoJSON(geojson) {
-
+function addGeoJSONFileLayer(name, geojson) {
     document.getElementById("empty-state")?.remove();
 
-    // Remove existing source/layers if present
-    if (map.getSource(SOURCE_ID)) {
-        removeLayerIfExists("points");
-        removeLayerIfExists("lines");
-        removeLayerIfExists("polygons");
-        removeLayerIfExists("polygons-outline");
-        map.removeSource(SOURCE_ID);
-    }
+    const id = `f${++fileCounter}`;
+    const sourceId = `geojson-${id}`;
 
+    const bounds = computeBounds(geojson);
 
-    map.addSource(SOURCE_ID, {
-        type: "geojson",
-        data: geojson
-    });
+    map.addSource(sourceId, { type: "geojson", data: geojson });
 
-    // Polygons
+    // unique layer ids per file
+    const polygonsId = `polygons-${id}`;
+    const polygonsOutlineId = `polygons-outline-${id}`;
+    const linesId = `lines-${id}`;
+    const pointsId = `points-${id}`;
+
+    // Add layers (order: polygons -> outline -> lines -> points)
     map.addLayer({
-        id: "polygons",
+        id: polygonsId,
         type: "fill",
-        source: SOURCE_ID,
+        source: sourceId,
         filter: ["==", ["geometry-type"], "Polygon"],
-        paint: {
-            "fill-color": PRIMARY,
-            "fill-opacity": 0.354
-        }
+        paint: { "fill-color": PRIMARY, "fill-opacity": 0.354 }
     });
 
     map.addLayer({
-        id: "polygons-outline",
+        id: polygonsOutlineId,
         type: "line",
-        source: SOURCE_ID,
+        source: sourceId,
         filter: ["==", ["geometry-type"], "Polygon"],
-        paint: {
-            "line-color": PRIMARY,
-            "line-width": 3
-        }
+        paint: { "line-color": PRIMARY, "line-width": 3 }
     });
 
-    // Lines
     map.addLayer({
-        id: "lines",
+        id: linesId,
         type: "line",
-        source: SOURCE_ID,
+        source: sourceId,
         filter: ["==", ["geometry-type"], "LineString"],
-        paint: {
-            "line-color": PRIMARY_DARK,
-            "line-width": 4,
-            "line-opacity": 0.9
-        }
+        paint: { "line-color": PRIMARY_DARK, "line-width": 4, "line-opacity": 0.9 }
     });
 
-    // Points
     map.addLayer({
-        id: "points",
+        id: pointsId,
         type: "circle",
-        source: SOURCE_ID,
+        source: sourceId,
         filter: ["==", ["geometry-type"], "Point"],
         paint: {
             "circle-radius": 7,
@@ -180,54 +107,219 @@ function renderGeoJSON(geojson) {
             "circle-stroke-width": 2,
             "circle-stroke-color": "#ffffff"
         }
-
-
     });
 
-    fitToBounds(geojson);
-    enablePopups();
+    const entry = {
+        id,
+        name,
+        geojson,
+        bounds,
+        sourceId,
+        layerIds: [polygonsId, polygonsOutlineId, linesId, pointsId],
+        visible: true
+    };
+
+    filesRegistry.push(entry);
+    renderFilesPanel();
+
+    // Auto-zoom only on first file
+    if (filesRegistry.length === 1 && bounds) {
+        map.fitBounds(bounds, { padding: 40, duration: 500 });
+    }
 
 }
 
-function removeLayerIfExists(id) {
-    if (map.getLayer(id)) map.removeLayer(id);
+
+
+//=============================================
+// Copute Bounds Helper function
+//=============================================
+function computeBounds(geojson) {
+    try {
+        const bounds = new maplibregl.LngLatBounds();
+
+        for (const f of geojson.features || []) {
+            const coords = extractCoords(f.geometry);
+            coords.forEach(c => bounds.extend(c));
+        }
+
+        return bounds.isEmpty() ? null : bounds;
+    } catch {
+        return null;
+    }
 }
+
+//===============================================
+// Function to render the file panel on left side
+//==============================================
+
+function renderFilesPanel() {
+    const panel = document.getElementById("files-panel");
+    const list = document.getElementById("files-list");
+    if (!panel || !list) return;
+
+    // Show panel only when >1 file
+    panel.hidden = filesRegistry.length < 2;
+
+    list.innerHTML = "";
+
+    for (const file of filesRegistry) {
+        const row = document.createElement("div");
+        row.className = "file-row";
+
+        const eye = document.createElement("button");
+        eye.className = "file-eye";
+        eye.type = "button";
+        eye.textContent = file.visible ? "👁" : "🚫";
+
+        // Prevent row click when clicking eye
+        eye.addEventListener("click", (e) => {
+            e.stopPropagation();
+            toggleFileVisibility(file.id);
+            renderFilesPanel();
+        });
+
+        const name = document.createElement("div");
+        name.className = "file-name";
+        name.textContent = file.name;
+
+        row.appendChild(eye);
+        row.appendChild(name);
+
+        row.addEventListener("click", () => {
+            if (file.bounds) {
+                map.fitBounds(file.bounds, { padding: 50, duration: 450 });
+            }
+        });
+
+        list.appendChild(row);
+    }
+}
+
+
+//================================================
+// Toggle Visibility Function
+//===============================================
+function toggleFileVisibility(fileId) {
+    const file = filesRegistry.find(f => f.id === fileId);
+    if (!file) return;
+
+    file.visible = !file.visible;
+    const visibility = file.visible ? "visible" : "none";
+
+    for (const layerId of file.layerIds) {
+        if (map.getLayer(layerId)) {
+            map.setLayoutProperty(layerId, "visibility", visibility);
+        }
+    }
+}
+
+
 
 // ==============================
-// Drag & Drop Upload
+// GeoJSON handling
+// ==============================
+
+
+document.getElementById("fileInput").addEventListener("change", (e) => {
+    if (!e.target.files?.length) return;
+    handleFiles(Array.from(e.target.files));
+    e.target.value = ""; // allow re-uploading same file name
+});
+
+
+async function handleFiles(files) {
+    for (const file of files) {
+        if (!file.name.match(/\.(geojson|json)$/i)) {
+            alert(`Unsupported file: ${file.name}`);
+            continue;
+        }
+
+        try {
+            const text = await file.text();
+            const geojson = JSON.parse(text);
+
+            if (!geojson || geojson.type !== "FeatureCollection") {
+                alert(`Invalid GeoJSON (expected FeatureCollection): ${file.name}`);
+                continue;
+            }
+
+            addGeoJSONFileLayer(file.name, geojson);
+        } catch (err) {
+            console.error(err);
+            alert(`Failed to load: ${file.name}`);
+        }
+    }
+}
+
+
+
+// ==============================
+// Global drag activation (minimal & correct)
+// ==============================
+
+window.addEventListener("dragenter", e => {
+    e.preventDefault();
+    document.body.classList.add("dragging");
+});
+
+window.addEventListener("dragover", e => {
+    e.preventDefault();
+});
+
+window.addEventListener("dragleave", e => {
+    if (e.target === document.body || e.target === document.documentElement) {
+        document.body.classList.remove("dragging");
+    }
+});
+
+window.addEventListener("drop", e => {
+    e.preventDefault();
+    document.body.classList.remove("dragging");
+});
+
+
+// ==============================
+// Drag & Drop Upload (correct)
 // ==============================
 
 const dropzone = document.getElementById("dropzone");
 
 if (!IS_VIEW_MODE) {
-    ["dragenter", "dragover"].forEach(eventName => {
-        dropzone.addEventListener(eventName, e => {
-            e.preventDefault();
-            e.stopPropagation();
-            dropzone.classList.add("dragover");
-        });
+
+    // Prevent browser from opening files
+    window.addEventListener("dragover", e => e.preventDefault());
+    window.addEventListener("drop", e => e.preventDefault());
+
+    dropzone.addEventListener("dragenter", e => {
+        e.preventDefault();
+        dropzone.classList.add("dragover");
     });
 
-    ["dragleave", "drop"].forEach(eventName => {
-        dropzone.addEventListener(eventName, e => {
-            e.preventDefault();
-            e.stopPropagation();
+    dropzone.addEventListener("dragover", e => {
+        e.preventDefault();
+    });
+
+    dropzone.addEventListener("dragleave", e => {
+        e.preventDefault();
+
+        // Only remove if actually leaving the dropzone
+        if (e.target === dropzone) {
             dropzone.classList.remove("dragover");
-        });
+        }
     });
 
     dropzone.addEventListener("drop", e => {
-        const file = e.dataTransfer.files[0];
-        if (!file) return;
+        e.preventDefault();
+        dropzone.classList.remove("dragover");
 
-        if (!file.name.match(/\.(geojson|json)$/i)) {
-            alert("Please drop a GeoJSON file");
-            return;
-        }
+        const files = Array.from(e.dataTransfer.files || []);
+        if (!files.length) return;
 
-        handleFile({ target: { files: [file] } });
+        handleFiles(files);
     });
 }
+
 
 
 
@@ -235,29 +327,18 @@ if (!IS_VIEW_MODE) {
 // Fit bounds
 // ==============================
 
-function fitToBounds(geojson) {
-    const bounds = new maplibregl.LngLatBounds();
-
-    geojson.features.forEach(f => {
-        const coords = extractCoords(f.geometry);
-        coords.forEach(c => bounds.extend(c));
-    });
-
-    if (!bounds.isEmpty()) {
-        map.fitBounds(bounds, {
-            padding: 40,
-            duration: 500
-        });
-    }
-}
-
 // Hover affordance (registered once)
 map.on("mousemove", e => {
-    const features = map.queryRenderedFeatures(e.point, {
-        layers: ["points", "lines", "polygons"]
-    });
+    const layerIds = filesRegistry.flatMap(f => f.layerIds);
+    if (!layerIds.length) {
+        map.getCanvas().style.cursor = "";
+        return;
+    }
+
+    const features = map.queryRenderedFeatures(e.point, { layers: layerIds });
     map.getCanvas().style.cursor = features.length ? "pointer" : "";
 });
+
 
 
 function extractCoords(geometry) {
@@ -276,29 +357,6 @@ function extractCoords(geometry) {
     return coords;
 }
 
-
-//==================================
-//Helper Funciton for Link Creation
-//==================================
-
-async function uploadAndGetLink(geojson) {
-    const res = await fetch("/api/share", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(geojson)
-    });
-
-    if (!res.ok) {
-        const msg = await res.text().catch(() => "");
-        alert("Failed to create share link.\n" + msg);
-        return;
-    }
-
-    const { id } = await res.json();
-    const url = `${location.origin}/v/${id}`;
-
-    showShareBox(url);
-}
 
 //==================================
 // Helper Function for Link box
@@ -344,7 +402,8 @@ async function maybeLoadSharedMapFromUrl() {
             return;
         }
         const geojson = await res.json();
-        renderGeoJSON(geojson);
+        addGeoJSONFileLayer("Shared file", geojson);
+
 
         // Optional: hide upload UI in view mode
         const fileInput = document.getElementById("fileInput");
@@ -360,23 +419,26 @@ async function maybeLoadSharedMapFromUrl() {
 // Popups
 // ==============================
 
-function enablePopups() {
-    map.on("click", e => {
-        const features = map.queryRenderedFeatures(e.point, {
-            layers: ["points", "lines", "polygons"]
-        });
+map.on("click", e => {
+    const layerIds = filesRegistry.flatMap(f => f.layerIds);
 
-        if (!features.length) return;
+    if (!layerIds.length) return;
 
-        const props = features[0].properties || {};
-        const html = renderProperties(props);
-
-        new maplibregl.Popup()
-            .setLngLat(e.lngLat)
-            .setHTML(html)
-            .addTo(map);
+    const features = map.queryRenderedFeatures(e.point, {
+        layers: layerIds
     });
-}
+
+    if (!features.length) return;
+
+    const props = features[0].properties || {};
+    const html = renderProperties(props);
+
+    new maplibregl.Popup()
+        .setLngLat(e.lngLat)
+        .setHTML(html)
+        .addTo(map);
+});
+
 
 function renderProperties(properties) {
     const rows = Object.entries(properties)
