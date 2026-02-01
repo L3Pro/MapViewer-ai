@@ -1,5 +1,4 @@
-﻿// JavaScript source code
-
+﻿// JavaScript source code - MappViewer.ai app.js
 
 // ==============================
 // Visualization constants
@@ -11,6 +10,53 @@ const IS_VIEW_MODE = location.pathname.startsWith("/v/");
 let fileCounter = 0;
 const filesRegistry = []; // [{ id, name, geojson, bounds, sourceId, layerIds, visible }]
 
+// Share limits (clarity constants)
+const SHARE_LIMIT_MB = 30;
+const SOFT_WARN_MB = 25;
+const MB = 1024 * 1024;
+
+// ==============================
+// Minimal notice UI (toast)
+// ==============================
+
+let noticeEl = null;
+
+function ensureNoticeEl() {
+    if (noticeEl) return noticeEl;
+
+    noticeEl = document.createElement("div");
+    noticeEl.id = "notice";
+    noticeEl.style.position = "absolute";
+    noticeEl.style.bottom = "12px";
+    noticeEl.style.left = "12px";
+    noticeEl.style.zIndex = "50";
+    noticeEl.style.maxWidth = "360px";
+    noticeEl.style.padding = "10px 12px";
+    noticeEl.style.borderRadius = "10px";
+    noticeEl.style.border = "1px solid rgba(0,0,0,0.12)";
+    noticeEl.style.background = "rgba(255,255,255,0.96)";
+    noticeEl.style.backdropFilter = "blur(4px)";
+    noticeEl.style.boxShadow = "0 2px 10px rgba(0,0,0,0.12)";
+    noticeEl.style.fontSize = "12px";
+    noticeEl.style.color = "#111827";
+    noticeEl.style.display = "none";
+    noticeEl.style.pointerEvents = "none";
+
+    document.body.appendChild(noticeEl);
+    return noticeEl;
+}
+
+function showNotice(message, { ms = 2800 } = {}) {
+    if (!message) return;
+    const el = ensureNoticeEl();
+    el.textContent = message;
+    el.style.display = "block";
+
+    clearTimeout(showNotice._t);
+    showNotice._t = setTimeout(() => {
+        el.style.display = "none";
+    }, ms);
+}
 
 //=================================
 // Bundle Payload Helper
@@ -24,7 +70,6 @@ function getBundlePayload() {
     };
 }
 
-
 // ==============================
 // Map bootstrap
 // ==============================
@@ -32,7 +77,6 @@ function getBundlePayload() {
 if (IS_VIEW_MODE) {
     document.getElementById("readonly-banner").hidden = false;
 }
-
 
 const map = new maplibregl.Map({
     container: "map",
@@ -55,8 +99,6 @@ map.on("load", () => {
     // ✅ hydrate shared map only after map is ready
     maybeLoadSharedMapFromUrl();
 });
-
-
 
 // Enforce read-only behavior
 map.getCanvas().addEventListener("contextmenu", e => {
@@ -138,13 +180,10 @@ function addGeoJSONFileLayer(name, geojson) {
     if (filesRegistry.length === 1 && bounds) {
         map.fitBounds(bounds, { padding: 40, duration: 500 });
     }
-
 }
 
-
-
 //=============================================
-// Copute Bounds Helper function
+// Compute Bounds Helper function
 //=============================================
 function computeBounds(geojson) {
     try {
@@ -213,7 +252,6 @@ function renderFilesPanel() {
         row.appendChild(spacer);
         row.appendChild(removeBtn);
 
-
         row.addEventListener("click", () => {
             if (file.bounds) {
                 map.fitBounds(file.bounds, { padding: 50, duration: 450 });
@@ -223,7 +261,6 @@ function renderFilesPanel() {
         list.appendChild(row);
     }
 }
-
 
 //================================================
 // Toggle Visibility Function
@@ -242,19 +279,15 @@ function toggleFileVisibility(fileId) {
     }
 }
 
-
-
 // ==============================
 // GeoJSON handling
 // ==============================
-
 
 document.getElementById("fileInput").addEventListener("change", (e) => {
     if (!e.target.files?.length) return;
     handleFiles(Array.from(e.target.files));
     e.target.value = ""; // allow re-uploading same file name
 });
-
 
 async function handleFiles(files) {
     let added = false;
@@ -263,6 +296,13 @@ async function handleFiles(files) {
         if (!file.name.match(/\.(geojson|json)$/i)) {
             alert(`Unsupported file: ${file.name}`);
             continue;
+        }
+
+        // Soft warning: big files may not be shareable
+        if (!IS_VIEW_MODE && file.size > SOFT_WARN_MB * MB) {
+            showNotice(
+                `Large file detected. Files over ${SHARE_LIMIT_MB} MB can be viewed locally but cannot be shared.`
+            );
         }
 
         try {
@@ -288,9 +328,6 @@ async function handleFiles(files) {
     }
 }
 
-
-
-
 // ==============================
 // Global drag activation (minimal & correct)
 // ==============================
@@ -315,7 +352,6 @@ window.addEventListener("drop", e => {
     document.body.classList.remove("dragging");
 });
 
-
 // ==============================
 // Drag & Drop Upload (correct)
 // ==============================
@@ -323,7 +359,6 @@ window.addEventListener("drop", e => {
 const dropzone = document.getElementById("dropzone");
 
 if (!IS_VIEW_MODE) {
-
     // Prevent browser from opening files
     window.addEventListener("dragover", e => e.preventDefault());
     window.addEventListener("drop", e => e.preventDefault());
@@ -357,9 +392,6 @@ if (!IS_VIEW_MODE) {
     });
 }
 
-
-
-
 // ==============================
 // Fit bounds
 // ==============================
@@ -376,8 +408,6 @@ map.on("mousemove", e => {
     map.getCanvas().style.cursor = features.length ? "pointer" : "";
 });
 
-
-
 function extractCoords(geometry) {
     const coords = [];
 
@@ -393,7 +423,6 @@ function extractCoords(geometry) {
     recurse(geometry.coordinates);
     return coords;
 }
-
 
 //==================================
 // Helper Function for Share Box
@@ -428,32 +457,48 @@ function showShareBox(url) {
     };
 }
 
-
 //====================================
 // Upload Bundle and Get Link
 //====================================
 
 async function uploadBundleAndGetLink() {
     const payload = getBundlePayload();
-
     if (!payload.files.length) return;
 
-    const res = await fetch("/api/share", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-    });
+    let res;
+    try {
+        res = await fetch("/api/share", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+        });
+    } catch (e) {
+        console.error(e);
+        showNotice("Network error while creating share link.");
+        return;
+    }
 
     if (!res.ok) {
-        alert("Failed to create share link.");
+        // Prefer server-provided message (especially 413)
+        let msg = "";
+        try {
+            const data = await res.json();
+            msg = data?.message || data?.error || "";
+        } catch {
+            // ignore
+        }
+
+        if (res.status === 413) {
+            showNotice(msg || `This bundle exceeds the share limit (${SHARE_LIMIT_MB} MB).`);
+        } else {
+            showNotice(msg || "Failed to create share link.");
+        }
         return;
     }
 
     const { id } = await res.json();
     showShareBox(`${location.origin}/v/${id}`);
 }
-
-
 
 //====================================
 // Hydration Logic for /v/:id
@@ -480,7 +525,7 @@ async function maybeLoadSharedMapFromUrl() {
         }
 
         // Render each file in order
-        bundle.files.forEach((file, index) => {
+        bundle.files.forEach((file) => {
             addGeoJSONFileLayer(file.name, file.geojson);
         });
 
@@ -489,7 +534,6 @@ async function maybeLoadSharedMapFromUrl() {
 
         const upload = document.getElementById("upload");
         if (upload) upload.style.display = "none";
-
     } catch (e) {
         console.error(e);
         alert("Failed to load shared bundle.");
@@ -524,7 +568,6 @@ function removeFile(fileId) {
     renderFilesPanel();
 }
 
-
 // ==============================
 // Popups
 // ==============================
@@ -548,7 +591,6 @@ map.on("click", e => {
         .setHTML(html)
         .addTo(map);
 });
-
 
 function renderProperties(properties) {
     const rows = Object.entries(properties)
