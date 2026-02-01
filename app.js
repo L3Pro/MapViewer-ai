@@ -103,8 +103,10 @@ function getBundlePayload() {
 // ==============================
 
 if (IS_VIEW_MODE) {
-    document.getElementById("readonly-banner").hidden = false;
+    const container = document.getElementById("view-only-container");
+    if (container) container.hidden = false;
 }
+
 
 const map = new maplibregl.Map({
     container: "map",
