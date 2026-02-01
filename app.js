@@ -9,13 +9,16 @@ const PRIMARY_DARK = "#1e40af"; // for lines / emphasis
 const IS_VIEW_MODE = location.pathname.startsWith("/v/");
 let fileCounter = 0;
 const filesRegistry = []; // [{ id, name, geojson, bounds, sourceId, layerIds, visible }]
+let hoveredFeatureId = null;
+let hoveredLayerId = null;
+
 
 // Share limits (clarity constants)
 const SHARE_LIMIT_MB = 30;
 const SOFT_WARN_MB = 25;
 const MB = 1024 * 1024;
 
-//pre-dedicated colors 
+// Predefined per-file colors (automatic)
 const FILE_COLORS = [
     "#2563eb", // blue
     "#16a34a", // green
@@ -285,9 +288,20 @@ function renderFilesPanel() {
             renderFilesPanel();
         });
 
+        const dot = document.createElement("span");
+        dot.style.width = "10px";
+        dot.style.height = "10px";
+        dot.style.borderRadius = "50%";
+        dot.style.background = file.color;
+        dot.style.flex = "0 0 auto";
+        dot.style.boxShadow = "0 0 0 1px rgba(0,0,0,0.15)";
+
         const name = document.createElement("div");
         name.className = "file-name";
         name.textContent = file.name;
+        name.title = file.name;
+
+
 
         const spacer = document.createElement("div");
         spacer.style.flex = "1";
@@ -303,6 +317,7 @@ function renderFilesPanel() {
         });
 
         row.appendChild(eye);
+        row.appendChild(dot);
         row.appendChild(name);
         row.appendChild(spacer);
         row.appendChild(removeBtn);
@@ -454,14 +469,41 @@ if (!IS_VIEW_MODE) {
 // Hover affordance (registered once)
 map.on("mousemove", e => {
     const layerIds = filesRegistry.flatMap(f => f.layerIds);
-    if (!layerIds.length) {
+    if (!layerIds.length) return;
+
+    const features = map.queryRenderedFeatures(e.point, { layers: layerIds });
+
+    // Reset previous hover
+    if (!features.length && hoveredLayerId) {
+        resetHoverStyle();
+        hoveredFeatureId = null;
+        hoveredLayerId = null;
         map.getCanvas().style.cursor = "";
         return;
     }
 
-    const features = map.queryRenderedFeatures(e.point, { layers: layerIds });
-    map.getCanvas().style.cursor = features.length ? "pointer" : "";
+    if (!features.length) {
+        map.getCanvas().style.cursor = "";
+        return;
+    }
+
+    const feature = features[0];
+    const layerId = feature.layer.id;
+
+    map.getCanvas().style.cursor = "pointer";
+
+    if (hoveredFeatureId === feature.id && hoveredLayerId === layerId) {
+        return;
+    }
+
+    resetHoverStyle();
+
+    hoveredFeatureId = feature.id;
+    hoveredLayerId = layerId;
+
+    applyHoverStyle(layerId);
 });
+
 
 function extractCoords(geometry) {
     const coords = [];
@@ -478,6 +520,18 @@ function extractCoords(geometry) {
     recurse(geometry.coordinates);
     return coords;
 }
+
+//================================
+// Reset hover on mouse leave
+//================================
+
+map.on("mouseleave", () => {
+    resetHoverStyle();
+    hoveredFeatureId = null;
+    hoveredLayerId = null;
+    map.getCanvas().style.cursor = "";
+});
+
 
 //==================================
 // Helper Function for Share Box
@@ -511,6 +565,47 @@ function showShareBox(url) {
         }
     };
 }
+
+//====================================
+// Helper Functions for Hover styling
+//====================================
+
+function applyHoverStyle(layerId) {
+    const layer = map.getLayer(layerId);
+    if (!layer) return;
+
+    if (layer.type === "line") {
+        map.setPaintProperty(layerId, "line-width", 6);
+    }
+
+    if (layer.type === "fill") {
+        map.setPaintProperty(layerId, "fill-opacity", 0.55);
+    }
+
+    if (layer.type === "circle") {
+        map.setPaintProperty(layerId, "circle-radius", 9);
+    }
+}
+
+function resetHoverStyle() {
+    if (!hoveredLayerId) return;
+    const layer = map.getLayer(hoveredLayerId);
+    if (!layer) return;
+
+    // Restore defaults
+    if (layer.type === "line") {
+        map.setPaintProperty(hoveredLayerId, "line-width", 4);
+    }
+
+    if (layer.type === "fill") {
+        map.setPaintProperty(hoveredLayerId, "fill-opacity", 0.35);
+    }
+
+    if (layer.type === "circle") {
+        map.setPaintProperty(hoveredLayerId, "circle-radius", 7);
+    }
+}
+
 
 //====================================
 // Upload Bundle and Get Link
