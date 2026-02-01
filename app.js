@@ -15,6 +15,20 @@ const SHARE_LIMIT_MB = 30;
 const SOFT_WARN_MB = 25;
 const MB = 1024 * 1024;
 
+//===============================
+// Global Zoom Handler
+//===============================
+
+window.zoomToFeature = function (feature) {
+    const bounds = computeFeatureBounds(feature);
+    if (!bounds) return;
+    map.fitBounds(bounds, {
+        padding: 60,
+        duration: 450
+    });
+};
+
+
 // ==============================
 // Minimal notice UI (toast)
 // ==============================
@@ -199,6 +213,22 @@ function computeBounds(geojson) {
         return null;
     }
 }
+
+//==============================================
+// Zoom to Feature Helper Funciton
+//==============================================
+
+function computeFeatureBounds(feature) {
+    try {
+        const bounds = new maplibregl.LngLatBounds();
+        const coords = extractCoords(feature.geometry);
+        coords.forEach(c => bounds.extend(c));
+        return bounds.isEmpty() ? null : bounds;
+    } catch {
+        return null;
+    }
+}
+
 
 //===============================================
 // Function to render the file panel on left side
@@ -583,8 +613,10 @@ map.on("click", e => {
 
     if (!features.length) return;
 
-    const props = features[0].properties || {};
-    const html = renderProperties(props);
+    const feature = features[0];
+    const props = feature.properties || {};
+    const html = renderProperties(props, feature);
+
 
     new maplibregl.Popup()
         .setLngLat(e.lngLat)
@@ -592,7 +624,7 @@ map.on("click", e => {
         .addTo(map);
 });
 
-function renderProperties(properties) {
+function renderProperties(properties, feature) {
     const rows = Object.entries(properties)
         .map(([k, v]) =>
             `<tr><td class="key">${k}</td><td>${String(v)}</td></tr>`
@@ -601,6 +633,21 @@ function renderProperties(properties) {
 
     return `
     <div class="popup">
+      <div style="margin-bottom: 6px;">
+        <button
+          style="
+            font-size: 12px;
+            padding: 4px 8px;
+            border-radius: 6px;
+            border: 1px solid #93c5fd;
+            background: #eff6ff;
+            cursor: pointer;
+          "
+          onclick='zoomToFeature(${JSON.stringify(feature)})'
+        >
+          🔍 Zoom to feature
+        </button>
+      </div>
       <table>${rows}</table>
     </div>
   `;
