@@ -15,6 +15,17 @@ const SHARE_LIMIT_MB = 30;
 const SOFT_WARN_MB = 25;
 const MB = 1024 * 1024;
 
+//pre-dedicated colors 
+const FILE_COLORS = [
+    "#2563eb", // blue
+    "#16a34a", // green
+    "#ea580c", // orange
+    "#7c3aed", // purple
+    "#dc2626", // red
+    "#0891b2"  // teal
+];
+
+
 //===============================
 // Global Zoom Handler
 //===============================
@@ -129,6 +140,9 @@ function addGeoJSONFileLayer(name, geojson) {
     const id = `f${++fileCounter}`;
     const sourceId = `geojson-${id}`;
 
+    const color = FILE_COLORS[(fileCounter - 1) % FILE_COLORS.length];
+
+
     const bounds = computeBounds(geojson);
 
     map.addSource(sourceId, { type: "geojson", data: geojson });
@@ -145,7 +159,10 @@ function addGeoJSONFileLayer(name, geojson) {
         type: "fill",
         source: sourceId,
         filter: ["==", ["geometry-type"], "Polygon"],
-        paint: { "fill-color": PRIMARY, "fill-opacity": 0.354 }
+        paint: {
+            "fill-color": color,
+            "fill-opacity": 0.35
+        }
     });
 
     map.addLayer({
@@ -153,7 +170,10 @@ function addGeoJSONFileLayer(name, geojson) {
         type: "line",
         source: sourceId,
         filter: ["==", ["geometry-type"], "Polygon"],
-        paint: { "line-color": PRIMARY, "line-width": 3 }
+        paint: {
+            "line-color": color,
+            "line-width": 3
+        }
     });
 
     map.addLayer({
@@ -161,7 +181,11 @@ function addGeoJSONFileLayer(name, geojson) {
         type: "line",
         source: sourceId,
         filter: ["==", ["geometry-type"], "LineString"],
-        paint: { "line-color": PRIMARY_DARK, "line-width": 4, "line-opacity": 0.9 }
+        paint: {
+            "line-color": color,
+            "line-width": 4,
+            "line-opacity": 0.9
+        }
     });
 
     map.addLayer({
@@ -171,7 +195,7 @@ function addGeoJSONFileLayer(name, geojson) {
         filter: ["==", ["geometry-type"], "Point"],
         paint: {
             "circle-radius": 7,
-            "circle-color": PRIMARY,
+            "circle-color": color,
             "circle-stroke-width": 2,
             "circle-stroke-color": "#ffffff"
         }
@@ -182,6 +206,7 @@ function addGeoJSONFileLayer(name, geojson) {
         name,
         geojson,
         bounds,
+        color,
         sourceId,
         layerIds: [polygonsId, polygonsOutlineId, linesId, pointsId],
         visible: true
